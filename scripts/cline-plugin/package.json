@@ -1,0 +1,13 @@
+{
+  "name": "rtk-cline-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Installs the rtk binary matching the current platform through cline plugin install",
+  "type": "module",
+  "cline": {
+    "plugins": ["./index.js"]
+  },
+  "scripts": {
+    "postinstall": "node ./install-rtk.js"
+  }
+}
