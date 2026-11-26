@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs the rtk distribution adapter with `cline plugin install`.
 # Extra arguments are passed through, e.g. --cwd <path> or --json.
-# Environment: CLINE_BIN (default: cline), RTK_VERSION, RTK_EDITION=oss, RTK_INSTALL_DIR.
+# Environment: CLINE_BIN (default: cline), RTK_VERSION, RTK_INSTALL_DIR.
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
