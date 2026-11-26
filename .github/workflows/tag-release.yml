@@ -1,0 +1,107 @@
+name: Tag Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            archive: tar.gz
+            musl: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            archive: tar.gz
+            musl: true
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl tools
+        if: matrix.musl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Build rtk
+        run: cargo build --release --locked --target ${{ matrix.target }}
+        env:
+          RTK_TELEMETRY_URL: ${{ vars.RTK_TELEMETRY_URL }}
+          RTK_TELEMETRY_TOKEN: ${{ secrets.RTK_TELEMETRY_TOKEN }}
+
+      # The default build links the BUSL-1.1 rtk-engine, so LICENSE-ENGINE
+      # must travel with the binary alongside the Apache-2.0 LICENSE.
+      - name: Package (Unix)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          dir=target/${{ matrix.target }}/release
+          cp LICENSE "$dir/LICENSE"
+          cp engine/LICENSE "$dir/LICENSE-ENGINE"
+          tar -C "$dir" -czf "rtk-${{ matrix.target }}.tar.gz" rtk LICENSE LICENSE-ENGINE
+
+      - name: Package (Windows)
+        if: matrix.archive == 'zip'
+        shell: bash
+        run: |
+          dir=target/${{ matrix.target }}/release
+          cp LICENSE "$dir/LICENSE"
+          cp engine/LICENSE "$dir/LICENSE-ENGINE"
+          (cd "$dir" && 7z a "$GITHUB_WORKSPACE/rtk-${{ matrix.target }}.zip" rtk.exe LICENSE LICENSE-ENGINE)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: rtk-${{ matrix.target }}
+          path: rtk-${{ matrix.target }}.${{ matrix.archive }}
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create checksums
+        working-directory: dist
+        run: sha256sum rtk-* > checksums.txt
+
+      - name: Publish release
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: dist/*
+          prerelease: ${{ contains(github.ref_name, '-') }}
