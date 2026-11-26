@@ -21,21 +21,16 @@ jobs:
         include:
           - target: x86_64-apple-darwin
             os: macos-latest
-            archive: tar.gz
           - target: aarch64-apple-darwin
             os: macos-latest
-            archive: tar.gz
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
-            archive: tar.gz
             musl: true
           - target: aarch64-unknown-linux-musl
             os: ubuntu-24.04-arm
-            archive: tar.gz
             musl: true
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            archive: zip
 
     steps:
       - name: Checkout
@@ -58,30 +53,20 @@ jobs:
           RTK_TELEMETRY_URL: ${{ vars.RTK_TELEMETRY_URL }}
           RTK_TELEMETRY_TOKEN: ${{ secrets.RTK_TELEMETRY_TOKEN }}
 
-      # The default build links the BUSL-1.1 rtk-engine, so LICENSE-ENGINE
-      # must travel with the binary alongside the Apache-2.0 LICENSE.
-      - name: Package (Unix)
-        if: matrix.archive == 'tar.gz'
-        run: |
-          dir=target/${{ matrix.target }}/release
-          cp LICENSE "$dir/LICENSE"
-          cp engine/LICENSE "$dir/LICENSE-ENGINE"
-          tar -C "$dir" -czf "rtk-${{ matrix.target }}.tar.gz" rtk LICENSE LICENSE-ENGINE
+      - name: Stage binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: cp target/${{ matrix.target }}/release/rtk rtk-${{ matrix.target }}
 
-      - name: Package (Windows)
-        if: matrix.archive == 'zip'
+      - name: Stage binary (Windows)
+        if: matrix.os == 'windows-latest'
         shell: bash
-        run: |
-          dir=target/${{ matrix.target }}/release
-          cp LICENSE "$dir/LICENSE"
-          cp engine/LICENSE "$dir/LICENSE-ENGINE"
-          (cd "$dir" && 7z a "$GITHUB_WORKSPACE/rtk-${{ matrix.target }}.zip" rtk.exe LICENSE LICENSE-ENGINE)
+        run: cp target/${{ matrix.target }}/release/rtk.exe rtk-${{ matrix.target }}.exe
 
-      - name: Upload artifact
+      - name: Upload binary
         uses: actions/upload-artifact@v7
         with:
           name: rtk-${{ matrix.target }}
-          path: rtk-${{ matrix.target }}.${{ matrix.archive }}
+          path: rtk-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}
           if-no-files-found: error
 
   release:
